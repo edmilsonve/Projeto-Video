@@ -34,9 +34,10 @@ class ImageGenerationService:
             "width": 1024,
             "height": 1024,
             "seed": 0,
-            "cfg_scale": 5,
+            "cfg_scale": 7,
             "samples": 1,
             "text_prompts": [{"text": prompt, "weight": 1}],
+            "style_preset": "cinematic"
         }
         
         try:
@@ -96,10 +97,10 @@ class VoiceService:
         client = OpenAI(api_key=api_key)
         
         try:
-            print("Generating Audio via OpenAI TTS (User requested Pollinations, but using OpenAI as reliably available)...")
+            print("Generating Audio via OpenAI TTS (HD)...")
             response = client.audio.speech.create(
-                model="tts-1",
-                voice="alloy",
+                model="tts-1-hd",
+                voice="onyx",
                 input=text
             )
             response.stream_to_file(output_path)

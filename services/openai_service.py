@@ -26,7 +26,7 @@ class OpenAIService:
             "2. Language: Portuguese (Brazil).\n"
             "3. Divide story into 3-5 scenes.\n"
             "4. Each scene MUST be max 30 seconds (approx 60 words).\n"
-            "5. 'visual': A detailed English prompt for an AI image generator (Stable Diffusion) describing the scene.\n"
+            "5. 'visual': A detailed English prompt for an AI image generator (Stable Diffusion). Style: Cinematic, Photorealistic, 8k, Unreal Engine 5 render, dramatic lighting.\n"
             "6. 'text': The narration text in Portuguese.\n"
             "7. No markdown formatting (like ```json), just raw JSON string."
         )

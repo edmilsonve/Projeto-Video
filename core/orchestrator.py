@@ -119,12 +119,20 @@ class VideoOrchestrator:
 
         temp_out = os.path.join(tempfile.gettempdir(), output_filename)
         
-        # Scene Assembly command
+        # Scene Assembly command with Zoom Effect (Ken Burns)
+        # zoompan=z='min(zoom+0.0015,1.5)':d=700:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'
+        # We need to ensure the video duration matches the audio.
+        # -t is handled by -shortest, but zoompan needs explicit duration or high value
+        
+        # Get audio duration first for perfect sync? 
+        # For simplicity, we assume max 30s scene (30*25fps = 750 frames)
+        
         cmd = [
             ffmpeg_exe, "-y",
             "-loop", "1",
             "-i", image_path,
             "-i", audio_path,
+            "-vf", "zoompan=z='min(zoom+0.0015,1.5)':d=750:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=1024x1024",
             "-c:v", "libx264", "-tune", "stillimage",
             "-c:a", "aac", "-b:a", "192k",
             "-pix_fmt", "yuv420p",
