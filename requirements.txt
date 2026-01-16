@@ -1,0 +1,12 @@
+groq
+streamlit
+pandas
+google-generativeai
+google-cloud-aiplatform
+google-api-python-client
+google-auth-httplib2
+google-auth-oauthlib
+ffmpeg-python
+pydantic
+python-dotenv
+requests

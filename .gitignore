@@ -1,0 +1,17 @@
+__pycache__/
+*.py[cod]
+*$py.class
+.env
+.venv
+env/
+venv/
+*.mp4
+*.mp3
+*.png
+temp/
+final_videos/
+ffmpeg_bin/
+ffmpeg.zip
+state.json
+pipeline.log
+service_account.json
