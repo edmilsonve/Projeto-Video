@@ -37,6 +37,7 @@ grill → brief → [pesquisa ∥ outliers ∥ seo] → estratégia → roteiro 
 AO RECEBER UM TEMA: rode o GRILL (anexo B1) antes de qualquer outra coisa.
 AGENTES, CUSTOS E CONTRATOS: anexo B2. PARALELISMO E BARRAMENTO: B3. LOOP E AGENDA: B4.
 NAVEGADOR: B5. PRs: B6. LOGS: B7. DICAS → IMPLEMENTAÇÃO: B8. SKILLS: B9. ROADMAP: B10.
+PRIORIDADES (P0 antes de tudo): B11. FONTES DO USUÁRIO: B12.
 Leia só o anexo de que a tarefa precisa (docs/PROMPT_SISTEMA_CANAL_DARK.md).
 
 AO MUDAR CÓDIGO: branch feat/*, testes com mocks (pytest sem rede), /code-review low,
@@ -286,6 +287,74 @@ atualizar o doc correspondente no mesmo PR, commit e push. Nunca commitar .env n
 - se há GPU local;
 - qual o teto mensal;
 - se mantém ou não o OpenAI que o código atual usa no roteiro. Recomendação: trocar pelo tier Sonnet ou Haiku do Claude e manter Gemini/Groq como alternativa grátis. **A decisão é da pessoa.**
+
+### B11. Ponderação: dicas, observações e arquitetura
+
+Cada item recebe quatro notas, que definem a ordem de implementação e o peso nas decisões do orquestrador:
+- **Impacto** (1–5)
+- **Esforço/custo** (1–5; 1 é barato)
+- **Risco se ignorado** (1–5)
+- **Evidência:** F (forte: política oficial ou caso documentado), M (média: consenso entre fontes) ou f (fraca: afirmação de fornecedor ou anedota)
+
+**Prioridade** = Impacto + Risco − Esforço, com ajuste pela evidência: F +1, f −1.
+
+**Dicas**
+
+| Prioridade | Dicas | I | E | R | Ev | Por quê |
+|---|---|---|---|---|---|---|
+| **P0 (fazer primeiro)** | 3 contra conteúdo inautêntico, 21 `containsSyntheticMedia`, 22 não parecer oficial, 23 sem template em massa | 5 | 2 | 5 | F | É o que encerrou canais com milhões de inscritos. Sem isso, o resto não importa |
+| P0 | 4 título e thumb, 13 A/B nativo | 5 | 2 | 3 | F | Recurso oficial do Studio; o CTR abre a distribuição |
+| P0 | 7 gancho, 24 título entregue, 25 retenção aos 30 s | 5 | 2 | 4 | M | Consenso entre as fontes; checagem barata no QA |
+| P0 | 9 IA como auxiliar, 46 qualidade > quantidade | 5 | 3 | 5 | F | É a revisão humana que separa os sobreviventes dos encerrados |
+| P1 | 2 micronicho, 5 outliers, 8 mudar o ângulo, 1 nicho | 4 | 2 | 3 | M | Script barato (D1), alto retorno na escolha de tema |
+| P1 | 14 produção em bloco, 30 Shorts derivados, 42 banco de assets | 4 | 2 | 2 | M | Reduzem custo e tempo diretamente |
+| P1 | 17 SEO, 33 capítulos, 31/32 séries e telas finais | 3 | 1 | 2 | M | Quase grátis, ganho acumulado |
+| P1 | 27 fontes na tela, 28 política de correção | 3 | 1 | 3 | F | Prática do Kurzgesagt; reduz risco de desinformação |
+| P1 | 10 voz neural, 41 licenças | 4 | 2 | 4 | M | Voz ruim derruba retenção; licença errada derruba canal |
+| P2 | 12 legendas (o "+20–30%" é f), 11 ritmo variado | 3 | 2 | 2 | M/f | Úteis, mas o ganho numérico citado não tem fonte primária |
+| P2 | 15/43 receita própria e afiliados | 4 | 3 | 1 | M | Importante depois da tração, não antes |
+| P2 | 16 idiomas (via dublagem automática primeiro) | 4 | 2 | 1 | M | Teste grátis antes de abrir canal novo |
+| P2 | 19 Comunidade, 34 comentário fixado, 35 horário | 2 | 1 | 1 | M | Ganho marginal, custo baixo |
+| P2 | 29 deep dives de 30–60 min, 26 três aberturas | 3 | 3 | 1 | f | Testar no modo laboratório antes de padronizar |
+| P3 | 18 MVP, 49 canal-laboratório | 3 | 1 | 1 | M | Ferramenta de validação, não de crescimento |
+| **Descartada como escrita** | 20 aquecer conta simulando humano | 0 | — | 5 | f/negativa | Sem evidência de ganho e viola os termos. Fica só o checklist manual e a cadência gradual |
+
+**Observações da pesquisa**
+
+| Observação | Peso | Efeito no sistema |
+|---|---|---|
+| Os sobreviventes têm equipe, pesquisa e identidade própria | Alto (F) | O L5 e a aprovação humana são obrigatórios; o brand kit (40) sobe para P1 |
+| Rotular salvou e não rotular encerrou (Screen Culture) | Alto (F) | R4 vira bloqueio no CI, não aviso |
+| Nicho religioso ou de quiz não protege de produção em massa | Alto (F) | O L5 checa a similaridade entre os últimos 10 roteiros do canal; similaridade acima de 0,8 bloqueia |
+| "Satisfação é o sinal principal desde abr/2026" | Baixo (f) | Não muda a arquitetura; usa retenção aos 30 s e "título entregue", que são mensuráveis |
+| Números de inscritos de blogs divergem | Médio | O D1 usa a API oficial, nunca números de blog |
+| Edge-TTS em uso comercial é zona cinzenta | Médio (M) | Kokoro como padrão |
+
+**Decisões de arquitetura**
+
+| Decisão | Alternativa | Escolha | Motivo |
+|---|---|---|---|
+| Pipeline Python com a API do Claude | Subagentes do Claude Code | **Pipeline** | Ordens de grandeza mais barato e reprodutível; o Claude Code fica para dev e supervisão |
+| 7 agentes com LLM + 8 scripts | 19 agentes com LLM | **7+8** | Menos chamadas e menos handoff; revisão numa chamada estruturada |
+| Cron do GitHub Actions | `/loop` ou cron local | **Actions** para orquestrar; **render local** quando houver GPU ou muitos vídeos | O Actions é grátis parado, mas o render consome minutos (2000/mês em repo privado) |
+| PR por vídeo e depois por lote | Sempre por vídeo | **Híbrido** | Calibra nos 10 primeiros, depois economiza tempo de revisão |
+| Barramento SQLite | Arquivos JSON soltos ou fila externa | **SQLite** | Zero infraestrutura, transacional, fácil de inspecionar |
+| Kokoro local | ElevenLabs | **Kokoro**; ElevenLabs só no canal que já monetiza | Custo zero; trocar quando a receita pagar |
+| Banco de assets + geração local | API de imagem por cena | **Banco + local** | Reaproveita entre vídeos; API só como último recurso |
+| Dublagem automática do YouTube | Canal por idioma desde o início | **Dublagem primeiro** | Mede a demanda por idioma sem custo; abre canal só onde houver tração |
+| Haiku por padrão | Sonnet em tudo | **Haiku**; Sonnet só em L3/L4 | Haiku custa cerca de 1/20 do Sonnet; escala só se a validação falhar |
+
+**Regra para o orquestrador:** com tempo ou orçamento limitado, implemente e mantenha primeiro os itens P0. Um item P2 nunca atrasa um P0. Reavalie as notas a cada trimestre com o `learnings.yaml`: uma evidência própria do canal (F) vale mais que qualquer fonte externa.
+
+### B12. Fontes externas do usuário (NotebookLM)
+
+As 20 dicas originais citam fontes numeradas [1–69], provavelmente do caderno NotebookLM do usuário. Quando o conteúdo desse caderno estiver acessível, por exportação para o Google Docs/Drive ou colado no chat:
+1. Extraia as dicas novas.
+2. Classifique cada uma com as notas da B11.
+3. Descarte as que violem R2–R4.
+4. Acrescente as demais à B8 com a citação da fonte.
+
+Não invente conteúdo do caderno.
 
 ---
 
