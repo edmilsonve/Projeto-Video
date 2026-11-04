@@ -38,21 +38,24 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.title("🎥 AI Shorts Generator")
-st.caption("Powered by OpenAI, Groq, Stability & FFMPEG")
+st.caption("Powered by Claude, Gemini, Stability & FFMPEG")
 
 # Sidebar for Configuration
 with st.sidebar:
     st.header("Settings")
     
     # Check Environment
-    keys = ["OPENAI_API_KEY", "GROQ_API_KEY", "STABILITY_API_KEY"]
-    all_keys_ok = True
-    for key in keys:
+    # Roteiro precisa de Claude OU Gemini; imagens precisam de Stability.
+    llm_keys = ["ANTHROPIC_API_KEY", "GEMINI_API_KEY"]
+    for key in llm_keys + ["STABILITY_API_KEY"]:
         if os.getenv(key):
              st.success(f"{key} Loaded")
         else:
-             st.error(f"{key} Missing")
-             all_keys_ok = False
+             st.warning(f"{key} Missing")
+    has_llm = any(os.getenv(k) for k in llm_keys) or bool(os.getenv("GOOGLE_CLOUD_PROJECT"))
+    all_keys_ok = has_llm and bool(os.getenv("STABILITY_API_KEY"))
+    if not has_llm:
+        st.error("Set ANTHROPIC_API_KEY and/or GEMINI_API_KEY")
     
     st.divider()
     if st.button("Check FFMPEG"):

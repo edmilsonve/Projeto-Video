@@ -1,0 +1,4 @@
+# Voz local grátis (opcional). Instale com: pip install -r requirements-local-tts.txt
+kokoro
+soundfile
+numpy

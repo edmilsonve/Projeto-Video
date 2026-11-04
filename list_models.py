@@ -1,13 +1,18 @@
+"""Lista os modelos disponíveis nos dois provedores (útil quando um ID é aposentado)."""
 import os
-import google.generativeai as genai
+
 from dotenv import load_dotenv
 
 load_dotenv()
 
-api_key = os.getenv("GEMINI_API_KEY")
-genai.configure(api_key=api_key)
+if os.getenv("ANTHROPIC_API_KEY"):
+    import anthropic
+    print("Claude models:")
+    for m in anthropic.Anthropic().models.list():
+        print(" ", m.id)
 
-print("Listing 1.5 models:")
-for m in genai.list_models():
-    if '1.5' in m.name:
-        print(m.name)
+if os.getenv("GEMINI_API_KEY"):
+    from google import genai
+    print("Gemini models:")
+    for m in genai.Client(api_key=os.getenv("GEMINI_API_KEY")).models.list():
+        print(" ", m.name)

@@ -66,46 +66,52 @@ class ImageGenerationService:
 
 
 class VoiceService:
-    def __init__(self):
-        # Pollinations does not require a key for general use usually
-        pass
+    """TTS sem OpenAI: Kokoro local (grátis, Apache 2.0) e, como alternativa, TTS do Gemini.
+
+    VOICE_PROVIDER = auto (padrão) | kokoro | gemini
+    """
+
+    def __init__(self, gemini_service=None):
+        self.provider = os.getenv("VOICE_PROVIDER", "auto").lower()
+        self.kokoro_lang = os.getenv("KOKORO_LANG", "p")        # 'p' = português do Brasil
+        self.kokoro_voice = os.getenv("KOKORO_VOICE", "pf_dora")
+        self._gemini = gemini_service
+        self._kokoro_pipeline = None
 
     def generate_voice(self, text: str, output_path: str):
-        """
-        Generates TTS.
-        The user requested Pollinations.ai.
-        As a backup/alternative if Pollinations doesn't have a direct TTS API easily accessible,
-        we might use a simple OpenAI TTS if available or a public endpoint.
-        
-        Trying OpenAI TTS as a reliable fallback since we have the key now?
-        Or strictly Pollinations? 
-        
-        Let's try a common free TTS endpoint if Pollinations fails or is unknown.
-        Actually, Pollinations IS primarily for images. 
-        For now, implementing a basic OpenAI TTS fallback since we have the key, 
-        but labeling it as 'Voice Service'.
-        """
-        api_key = os.getenv("OPENAI_API_KEY")
-        if api_key:
-             return self._generate_openai_tts(text, output_path, api_key)
-        
-        print("Warning: No suitable TTS provider found (Pollinations TTS endpoint is obscure, OpenAI key missing).")
+        """Gera um .wav e devolve o caminho, ou None se nenhum provedor funcionar."""
+        order = {"kokoro": ["kokoro"], "gemini": ["gemini"]}.get(self.provider, ["kokoro", "gemini"])
+        for name in order:
+            path = self._kokoro(text, output_path) if name == "kokoro" else self._gemini_tts(text, output_path)
+            if path:
+                return path
+        print("Warning: no TTS provider available (install kokoro or set GEMINI_API_KEY).")
         return None
 
-    def _generate_openai_tts(self, text, output_path, api_key):
-        from openai import OpenAI
-        client = OpenAI(api_key=api_key)
-        
+    def _kokoro(self, text, output_path):
         try:
-            print("Generating Audio via OpenAI TTS (HD)...")
-            response = client.audio.speech.create(
-                model="tts-1-hd",
-                voice="onyx",
-                input=text
-            )
-            response.stream_to_file(output_path)
-            print(f"Audio saved to {output_path}")
+            from kokoro import KPipeline
+            import numpy as np
+            import soundfile as sf
+        except ImportError:
+            return None  # Kokoro é opcional: pip install -r requirements-local-tts.txt
+        try:
+            if self._kokoro_pipeline is None:
+                self._kokoro_pipeline = KPipeline(lang_code=self.kokoro_lang)
+            chunks = [audio for _, _, audio in self._kokoro_pipeline(text, voice=self.kokoro_voice)]
+            if not chunks:
+                return None
+            sf.write(output_path, np.concatenate(chunks), 24000)
+            print(f"Kokoro audio saved to {output_path}")
             return output_path
         except Exception as e:
-            print(f"OpenAI TTS Error: {e}")
+            print(f"Kokoro TTS error: {e}")
             return None
+
+    def _gemini_tts(self, text, output_path):
+        if self._gemini is None:
+            from services.gemini import GeminiService
+            self._gemini = GeminiService()
+        if not self._gemini.available:
+            return None
+        return self._gemini.synthesize_speech(text, output_path)

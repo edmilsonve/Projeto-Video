@@ -8,26 +8,25 @@ try:
     print("--- Testing Services Import & Instantiation ---")
     
     from services.gemini import GeminiService
-    from services.groq import GroqService
+    from services.claude_service import ClaudeService
     from services.image_gen import ImageGenerationService, VoiceService
     from storage.drive import DriveService
 
-    # Test Gemini
-    gemini = GeminiService(api_key="test_key")
-    script = gemini.generate_script("Automation Test")
-    print(f"Gemini: {script}")
+    # Test Claude (chave falsa: a chamada falha e devolve None, sem derrubar o app)
+    claude = ClaudeService(api_key="test_key")
+    print(f"Claude: {claude.generate_script('Automation Test')}")
 
-    # Test Groq
-    groq = GroqService(api_key="test_key")
-    transcription = groq.transcribe_audio("dummy.mp3")
-    print(f"Groq: {transcription}")
+    # Test Gemini (roteiro alternativo + transcrição)
+    gemini = GeminiService(api_key="test_key")
+    print(f"Gemini: {gemini.generate_script('Automation Test')}")
+    print(f"Gemini transcription: {gemini.transcribe_audio('dummy.mp3')}")
 
     # Test Image/Voice
     img_gen = ImageGenerationService(stability_key="test_key")
     img_gen.generate_image("A futuristic city", "output_image.png")
     
     voice = VoiceService()
-    voice.generate_voice("Hello World", "output_audio.mp3")
+    voice.generate_voice("Hello World", "output_audio.wav")
 
     # Test Drive
     # Creating a dummy file to upload

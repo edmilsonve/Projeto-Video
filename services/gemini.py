@@ -1,69 +1,130 @@
+"""Gemini (SDK google-genai): roteiro alternativo, transcrição com timestamps e TTS."""
+import json
 import os
-import vertexai
-from vertexai.preview.generative_models import GenerativeModel
-import google.auth
+import wave
+from typing import Optional
+
+from google import genai
+from google.genai import types
+
+from services.schemas import Transcript, VideoScript, script_prompt
+
+# Os IDs mudam com frequência: confira em https://ai.google.dev/gemini-api/docs/models
+DEFAULT_TEXT_MODEL = "gemini-flash-latest"
+DEFAULT_TTS_MODEL = "gemini-3.8-flash-tts"
+DEFAULT_TTS_VOICE = "Kore"
+TTS_SAMPLE_RATE = 24000  # PCM 16-bit mono devolvido pelo TTS do Gemini
+
 
 class GeminiService:
-    def __init__(self, project_id=None, location="us-central1"):
-        # Prioritize API Key (Google AI Studio - Free Tier available)
-        self.api_key = os.getenv("GEMINI_API_KEY")
-        self.creds_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
-        
-        if self.api_key:
-            print("Initializing Gemini via Google AI Studio (API Key).")
-            import google.generativeai as genai
-            genai.configure(api_key=self.api_key)
-            self.model = genai.GenerativeModel('gemini-2.0-flash')
-            self.mode = "studio"
-        
-        elif self.creds_path and os.path.exists(self.creds_path):
-            print(f"Initializing Vertex AI with credentials: {self.creds_path}")
-            try:
-                creds, project = google.auth.default()
-                self.project_id = project_id or project
-                vertexai.init(project=self.project_id, location=location)
-                self.model = GenerativeModel("gemini-2.0-flash")
-                self.mode = "vertex"
-            except Exception as e:
-                print(f"Failed to init Vertex AI: {e}")
-                self.mode = "error"
-        
-        else:
-            print("Warning: No valid credentials found (Set GEMINI_API_KEY or GOOGLE_APPLICATION_CREDENTIALS).")
-            self.mode = None
+    def __init__(self, api_key: Optional[str] = None, client: Optional[genai.Client] = None):
+        self.text_model = os.getenv("GEMINI_MODEL", DEFAULT_TEXT_MODEL)
+        self.tts_model = os.getenv("GEMINI_TTS_MODEL", DEFAULT_TTS_MODEL)
+        self.tts_voice = os.getenv("GEMINI_TTS_VOICE", DEFAULT_TTS_VOICE)
+        self.client = client
+        self.mode = "injected" if client else None
+        if client is not None:
+            return
 
-    def generate_script(self, topic: str) -> str:
-        """
-        Generates a video script for the given topic.
-        """
-        if not self.mode:
-             print("Error: Gemini Service not initialized.")
-             return None
-
-        prompt = (
-            f"Create a compelling video script for YouTube Shorts about: '{topic}'.\n"
-            "Constraints:\n"
-            "1. The length MUST be between 2300 and 2400 characters.\n"
-            "2. Tone: Engaging, informative, and viral.\n"
-            "3. Structure: Hook, Body, Conclusion.\n"
-            "4. Output ONLY the raw text of the script, no meta-comments."
-        )
-
+        api_key = api_key or os.getenv("GEMINI_API_KEY")
+        project = os.getenv("GOOGLE_CLOUD_PROJECT")
         try:
-            print(f"Requesting script from Gemini ({self.mode}) for topic: {topic}...")
-            response = self.model.generate_content(prompt)
-            
-            # Vertex AI and Studio have slightly different response objects but .text usually works for both
-            script_text = response.text
-            
-            char_count = len(script_text)
-            print(f"Generated script length: {char_count} characters.")
-            
-            return script_text
-            
+            if api_key:
+                self.client = genai.Client(api_key=api_key)
+                self.mode = "studio"
+            elif project:
+                self.client = genai.Client(
+                    vertexai=True, project=project,
+                    location=os.getenv("GOOGLE_CLOUD_LOCATION", "global"))
+                self.mode = "vertex"
+            else:
+                print("Warning: set GEMINI_API_KEY or GOOGLE_CLOUD_PROJECT (Vertex AI).")
+        except Exception as e:  # credenciais inválidas não devem derrubar o app
+            print(f"Failed to init Gemini client: {e}")
+            self.client, self.mode = None, None
+
+    @property
+    def available(self) -> bool:
+        return self.client is not None
+
+    # --- Roteiro (alternativa ao Claude) ---------------------------------------
+    def generate_script(self, topic: str) -> Optional[dict]:
+        if not self.client:
+            print("Error: Gemini client not initialized.")
+            return None
+        try:
+            print(f"Requesting structured script from Gemini ({self.text_model}) for: {topic}...")
+            response = self.client.models.generate_content(
+                model=self.text_model,
+                contents=script_prompt(topic),
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    response_schema=VideoScript,
+                ),
+            )
+            script = response.parsed if isinstance(response.parsed, VideoScript) \
+                else VideoScript.model_validate(json.loads(response.text))
+            return script.model_dump() if script.scenes else None
         except Exception as e:
             print(f"Error calling Gemini API: {e}")
-            # If rate limit, maybe print specific advice
-            if "429" in str(e):
-                print("Hit Rate Limit (429). Waiting/Retrying might help.")
+            return None
+
+    # --- Transcrição (substitui o Whisper/Groq) ---------------------------------
+    def transcribe_audio(self, audio_path: str) -> Optional[dict]:
+        """Retorna {'text', 'segments': [{'start', 'end', 'text'}]} para gerar legendas."""
+        if not self.client:
+            print("Error: Gemini client not initialized.")
+            return None
+        if not os.path.exists(audio_path):
+            print(f"Error: Audio file not found at {audio_path}")
+            return None
+        try:
+            uploaded = self.client.files.upload(file=audio_path)
+            response = self.client.models.generate_content(
+                model=self.text_model,
+                contents=[
+                    "Transcreva este áudio em português do Brasil, palavra por palavra. "
+                    "Divida em trechos curtos (até ~7 palavras) com início e fim em segundos.",
+                    uploaded,
+                ],
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    response_schema=Transcript,
+                ),
+            )
+            transcript = response.parsed if isinstance(response.parsed, Transcript) \
+                else Transcript.model_validate(json.loads(response.text))
+            return transcript.model_dump()
+        except Exception as e:
+            print(f"Error transcribing with Gemini: {e}")
+            return None
+
+    # --- Voz (TTS) ---------------------------------------------------------------
+    def synthesize_speech(self, text: str, output_path: str) -> Optional[str]:
+        """Gera um .wav (PCM 24 kHz) com o TTS do Gemini."""
+        if not self.client:
+            print("Error: Gemini client not initialized.")
+            return None
+        try:
+            response = self.client.models.generate_content(
+                model=self.tts_model,
+                contents=text,
+                config=types.GenerateContentConfig(
+                    response_modalities=["AUDIO"],
+                    speech_config=types.SpeechConfig(
+                        voice_config=types.VoiceConfig(
+                            prebuilt_voice_config=types.PrebuiltVoiceConfig(
+                                voice_name=self.tts_voice))),
+                ),
+            )
+            pcm = response.candidates[0].content.parts[0].inline_data.data
+            with wave.open(output_path, "wb") as wf:
+                wf.setnchannels(1)
+                wf.setsampwidth(2)
+                wf.setframerate(TTS_SAMPLE_RATE)
+                wf.writeframes(pcm)
+            print(f"Gemini TTS audio saved to {output_path}")
+            return output_path
+        except Exception as e:
+            print(f"Gemini TTS error: {e}")
             return None

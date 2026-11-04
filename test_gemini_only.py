@@ -24,8 +24,7 @@ def test_gemini_generation():
     
     if script:
         print("\n--- Generated Script Sample ---")
-        print(script[:500] + "...\n(truncated)")
-        print(f"Total Length: {len(script)} chars")
+        print(f"Title: {script['title']} | Scenes: {len(script['scenes'])}")
         print("[SUCCESS] Gemini generated script.")
     else:
         print("[FAILED] No script returned.")

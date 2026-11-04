@@ -8,10 +8,10 @@ load_dotenv()
 def test_media_services():
     print("--- Testing Media Services ---")
     
-    # 1. Voice Test (OpenAI TTS as fallback/primary)
+    # 1. Voice Test (Kokoro local -> Gemini TTS)
     print("\n[Voice Test]")
     voice_service = VoiceService()
-    voice_out = "test_voice.mp3"
+    voice_out = "test_voice.wav"
     result_audio = voice_service.generate_voice("Hello, this is a test of the automatic video system.", voice_out)
     
     if result_audio and os.path.exists(result_audio):

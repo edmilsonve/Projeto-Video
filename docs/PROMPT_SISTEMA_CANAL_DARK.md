@@ -1,4 +1,12 @@
-# Prompt mestre v2: sistema multiagente para canais dark no YouTube
+# Prompt mestre v3: sistema multiagente para canais dark no YouTube
+
+> **O que mudou na v3:**
+> - **Provedores:** só Claude e Gemini. OpenAI e Groq saíram do código e do prompt.
+>   - Roteiro: Claude, com o Gemini como alternativa automática.
+>   - Transcrição: Gemini.
+>   - Voz: Kokoro local, com o TTS do Gemini como alternativa.
+> - **Plataforma:** Google Antigravity como IDE, com o **Claude Code como harness** (o único agente que escreve no repositório). O Gemini também entra pela CLI `agy`, como segundo modelo, só para leitura (anexo B13).
+> - **Regras na raiz:** o núcleo (Parte A) agora está em `CLAUDE.md`, e o `AGENTS.md` aponta para ele.
 
 > **O que mudou em relação à v1** (detalhes no final):
 > 1. A produção roda num **pipeline Python com a API do Claude** (Haiku por padrão). O Claude Code fica só para desenvolver e supervisionar. É a maior economia do sistema.
@@ -29,6 +37,10 @@ R3 Plataforma: upload e metadados só pela YouTube Data API. O navegador só LÊ
 R4 Divulgação: status.containsSyntheticMedia=true quando houver voz ou imagem realista de IA.
    Marque afiliados na descrição. Conteúdo "fan-made" ou especulativo diz isso no título.
 R5 Rastreabilidade: tudo vai para logs/*.jsonl e para o PR. Sem merge, sem publicação.
+R6 Provedores: só Claude (SDK anthropic) e Gemini (SDK google-genai). Nada de OpenAI ou Groq.
+   Roteiro: Claude → Gemini. Transcrição: Gemini. Voz: Kokoro local → Gemini TTS.
+R7 Plataforma: IDE Antigravity; harness Claude Code, o único agente que escreve no repositório.
+   O Gemini via `agy` entra só para leitura e revisão cruzada (anexo B13).
 
 FLUXO (estados em runs/<id>/state.json; etapas idempotentes por hash da entrada)
 grill → brief → [pesquisa ∥ outliers ∥ seo] → estratégia → roteiro → revisão → OK humano do roteiro
@@ -37,7 +49,7 @@ grill → brief → [pesquisa ∥ outliers ∥ seo] → estratégia → roteiro 
 AO RECEBER UM TEMA: rode o GRILL (anexo B1) antes de qualquer outra coisa.
 AGENTES, CUSTOS E CONTRATOS: anexo B2. PARALELISMO E BARRAMENTO: B3. LOOP E AGENDA: B4.
 NAVEGADOR: B5. PRs: B6. LOGS: B7. DICAS → IMPLEMENTAÇÃO: B8. SKILLS: B9. ROADMAP: B10.
-PRIORIDADES (P0 antes de tudo): B11. FONTES DO USUÁRIO: B12.
+PRIORIDADES (P0 antes de tudo): B11. FONTES DO USUÁRIO: B12. ANTIGRAVITY + HARNESS: B13.
 Leia só o anexo de que a tarefa precisa (docs/PROMPT_SISTEMA_CANAL_DARK.md).
 
 AO MUDAR CÓDIGO: branch feat/*, testes com mocks (pytest sem rede), /code-review low,
@@ -96,10 +108,10 @@ atualizar o doc correspondente no mesmo PR, commit e push. Nunca commitar .env n
 | L7 | Comunidade | Haiku via Batch | A18 | posts.md (7 por semana) |
 | D1 | Outliers | Python + YouTube Data API | A3 | outliers.csv (views ÷ mediana ≥ 3x), cache de 7 dias |
 | D2 | Autocomplete | Python (Playwright/HTTP público) | parte do A4 | keywords.json |
-| D3 | Voz | Kokoro local (Apache 2.0). Plano B: cota grátis oficial do Azure ou Google TTS. Pago opcional: ElevenLabs | A10 | audio/*.wav |
+| D3 | Voz | Kokoro local (Apache 2.0) → TTS do Gemini (`VOICE_PROVIDER`). Pago opcional: ElevenLabs | A10 | audio/*.wav |
 | D4 | Visuais | Banco de assets reaproveitável → Pexels/Pixabay → FLUX schnell/SDXL local → API paga | A11 | img/, broll/ + licenses.json |
 | D5 | Editor | FFmpeg em um passo (filter_complex), -preset veryfast | A12 | video.mp4 + 2–3 Shorts derivados |
-| D6 | Legendas | faster-whisper local ou Groq (grátis) | A13 | .srt (longo), .ass karaokê (Short) |
+| D6 | Legendas | Transcrição do Gemini com timestamps (`GeminiService.transcribe_audio`) | A13 | .srt (longo), .ass karaokê (Short) |
 | D7 | Thumbs+QA | Pillow (templates do brand kit) + ffprobe/loudnorm | A14+A15 | thumb_a/b/c.jpg, qa.json |
 | D8 | Publicador | YouTube Data API, só depois do merge | A16 | video_id, agendamento |
 
@@ -286,7 +298,7 @@ atualizar o doc correspondente no mesmo PR, commit e push. Nunca commitar .env n
 - quais chaves de API já existem;
 - se há GPU local;
 - qual o teto mensal;
-- se mantém ou não o OpenAI que o código atual usa no roteiro. Recomendação: trocar pelo tier Sonnet ou Haiku do Claude e manter Gemini/Groq como alternativa grátis. **A decisão é da pessoa.**
+- ~~se mantém o OpenAI~~ **decidido na v3:** Claude no roteiro e Gemini como alternativa. OpenAI e Groq foram removidos.
 
 ### B11. Ponderação: dicas, observações e arquitetura
 
@@ -356,6 +368,32 @@ As 20 dicas originais citam fontes numeradas [1–69], provavelmente do caderno 
 
 Não invente conteúdo do caderno.
 
+### B13. Plataforma: Antigravity como IDE e Claude Code como harness
+
+| Camada | Ferramenta | Papel |
+|---|---|---|
+| IDE/plataforma | Google Antigravity | Editor, terminal integrado, preview do Streamlit, gerenciador de agentes |
+| **Harness** (escreve código e orquestra) | **Claude Code**, pela extensão no Antigravity ou pela CLI `claude` no terminal integrado | Único agente que escreve no repositório. Lê `CLAUDE.md`, `.claude/settings.json` (hooks), `.claude/skills/` e `.mcp.json` |
+| Segundo modelo | Gemini via `agy` (Antigravity CLI), em modo não interativo | Só leitura: revisão cruzada de roteiro e PR, pesquisa com Google Search, análise multimodal de thumbs e vídeos concorrentes |
+| Runtime de produção | Pipeline Python: Claude (`anthropic`) como principal e Gemini (`google-genai`) para alternativa, transcrição e TTS | Não depende de IDE: roda igual no Actions, no terminal ou no Antigravity |
+
+**Regras:**
+- **Um escritor só:** o agente nativo do Antigravity não edita o repositório ao mesmo tempo que o Claude Code. Se a pessoa quiser usá-lo, que seja numa branch ou worktree separada.
+- **Comunicação Claude Code → agy, por arquivo:**
+  1. O Claude Code escreve `runs/<id>/agy/task.md` (tarefa, arquivos de entrada e formato da resposta).
+  2. Chama o `agy` sem interação e com política de aprovação **somente leitura**.
+  3. Lê `runs/<id>/agy/result.md`, valida e registra no JSONL com `agent="agy"`.
+  - Use timeout e limite o tamanho da saída.
+- **Quando chamar o agy:** só em itens P0/P1 da B11. Por exemplo, a revisão cruzada do roteiro antes do OK humano, porque um modelo diferente pega erros diferentes, ou a checagem de fatos com fonte. Nunca dentro do laço por cena.
+- **Flags do agy:** confirme com `agy --help`. O modo não interativo e a política de aprovação mudaram em relação ao antigo Gemini CLI, então não copie flags de tutoriais antigos.
+- **Skills:**
+  - O Claude Code lê `.claude/skills/`; o Antigravity usa `.agents/skills/`.
+  - A fonte única fica em `.claude/skills/`. Se o formato `SKILL.md` for compatível na versão instalada, crie o link `.agents/skills -> ../.claude/skills`.
+- **Regras compartilhadas:** `CLAUDE.md` vale para o Claude Code. O `AGENTS.md` aponta para ele, para que qualquer agente siga as regras R1–R7.
+- **Hooks:** STOP, teto de custo e bloqueio de push na main ficam em `.claude/settings.json`. São do harness, então valem em qualquer IDE.
+- **Navegador:** a automação de leitura continua no Playwright, e as ações assistidas da B5 continuam com confirmação da pessoa. O navegador do Antigravity é controlado pelo agente do Antigravity, que não é o harness, então ele não faz ações em nome do sistema.
+- **Passo a passo de instalação:** `docs/ANTIGRAVITY.md`.
+
 ---
 
 ## Estimativa de custo por vídeo longo (v2)
@@ -378,6 +416,16 @@ São estimativas de projeto, ainda não medidas. Recalibre com o `cost.json` dos
 - **Na Batch API:** os roteiros do lote semanal custam cerca de metade.
 - **Shorts derivados:** cerca de US$ 0,005 cada.
 - **Comparação:** rodar o mesmo trabalho como subagentes do Claude Code custaria ordens de grandeza a mais, porque cada subagente começa do zero e relê o contexto. Por isso a v2 separa a supervisão (Claude Code) da execução (pipeline).
+
+## Changelog v2 → v3
+
+- **Código:**
+  - Saíram `services/openai_service.py` e `services/groq.py`.
+  - Entraram `services/claude_service.py` (saída estruturada, cache no system e tratamento de recusa) e `services/script_router.py` (Claude → Gemini).
+  - `services/gemini.py` migrou para o `google-genai`: roteiro em JSON, transcrição com timestamps e TTS em WAV.
+  - `VoiceService` usa Kokoro → Gemini TTS.
+  - Novos testes em `tests/` (pytest com dublês, sem rede).
+- **Plataforma:** Antigravity + harness Claude Code + `agy` como segundo modelo (B13, `docs/ANTIGRAVITY.md`, `CLAUDE.md`, `AGENTS.md`).
 
 ## Changelog v1 → v2
 

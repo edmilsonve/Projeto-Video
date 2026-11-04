@@ -1,8 +1,9 @@
 import os
 import json
 import tempfile
-from services.openai_service import OpenAIService
-from services.groq import GroqService
+from services.claude_service import ClaudeService
+from services.gemini import GeminiService
+from services.script_router import ScriptRouter
 from services.image_gen import ImageGenerationService, VoiceService
 from storage.local import LocalStorageService
 from utils.text import slugify
@@ -12,10 +13,12 @@ class VideoOrchestrator:
         self.state_file = "state.json"
         
         # Initialize Services
-        self.script_service = OpenAIService()
-        self.transcription_service = GroqService()
+        # Roteiro: Claude (principal) -> Gemini (alternativa). Gemini também transcreve e faz TTS.
+        self.gemini_service = GeminiService()
+        self.script_service = ScriptRouter(ClaudeService(), self.gemini_service)
+        self.transcription_service = self.gemini_service
         self.image_service = ImageGenerationService()
-        self.voice_service = VoiceService()
+        self.voice_service = VoiceService(gemini_service=self.gemini_service)
         self.storage_service = LocalStorageService(output_root="final_videos")
         
         self.current_video = {}
@@ -58,7 +61,7 @@ class VideoOrchestrator:
             scene_visual = scene.get("visual")
             
             # A. Audio
-            audio_filename = f"tmp_{slug}_s{i}.mp3"
+            audio_filename = f"tmp_{slug}_s{i}.wav"
             audio_path = self.voice_service.generate_voice(scene_text, audio_filename)
             if not audio_path:
                 print(f"    Failed Audio for Scene {i+1}")

@@ -9,7 +9,7 @@ def test_full_pipeline():
     print("--- Testing Full Video Automation Pipeline ---")
     
     # Check keys
-    required_keys = ["OPENAI_API_KEY", "GROQ_API_KEY", "STABILITY_API_KEY"]
+    required_keys = ["ANTHROPIC_API_KEY", "GEMINI_API_KEY", "STABILITY_API_KEY"]
     missing = [k for k in required_keys if not os.getenv(k)]
     if missing:
         print(f"WARNING: Missing keys: {missing}. Pipeline may fail.")
