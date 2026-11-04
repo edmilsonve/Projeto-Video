@@ -41,8 +41,12 @@ R6 Provedores: só Claude (SDK anthropic) e Gemini (SDK google-genai). Nada de O
    Roteiro: Claude → Gemini. Transcrição: Gemini. Voz: Kokoro local → Gemini TTS.
 R7 Plataforma: IDE Antigravity; harness Claude Code, o único agente que escreve no repositório.
    O Gemini via `agy` entra só para leitura e revisão cruzada (anexo B13).
+R8 Segurança: o agente nunca lê credenciais, nunca publica, nunca faz merge nem mexe em secrets
+   (bloqueado em .claude/settings.json). A publicação passa pelo ambiente protegido youtube-production
+   ou por uma pessoa no terminal. Ver docs/SEGURANCA_CREDENCIAIS.md e docs/AUTOMACAO_PUBLICACAO.md.
 
-FLUXO (estados em runs/<id>/state.json; etapas idempotentes por hash da entrada)
+FLUXO (máquina de estados em core/workflow.py, documentada em docs/WORKFLOW.md (gerado);
+estado em runs/<id>/state.json + events.jsonl; etapas idempotentes por hash da entrada)
 grill → brief → [pesquisa ∥ outliers ∥ seo] → estratégia → roteiro → revisão → OK humano do roteiro
 → [voz ∥ visuais ∥ thumbs] → edição → legendas → QA → PR → merge → publicação → analytics → aprendizado
 
@@ -176,6 +180,8 @@ atualizar o doc correspondente no mesmo PR, commit e push. Nunca commitar .env n
 - **Proibido:** login automatizado, criação de contas, aquecimento por robô, interação falsa e rotação de IP ou fingerprint.
 
 ### B6. Controle de PR
+
+> **Implementado na v3.1:** a máquina de estados fica em `core/workflow.py`, o diagrama em `docs/WORKFLOW.md` (gerado), a publicação em `docs/AUTOMACAO_PUBLICACAO.md` e a segurança em `docs/SEGURANCA_CREDENCIAIS.md`.
 
 - **Fase de calibração (10 primeiros vídeos):** 1 PR por vídeo, com a branch `video/<canal>/<data>-<slug>`.
 - **Depois disso:** 1 PR por lote semanal, com um checklist por vídeo. Assim a pessoa revisa menos vezes e o CI roda menos.
@@ -416,6 +422,17 @@ São estimativas de projeto, ainda não medidas. Recalibre com o `cost.json` dos
 - **Na Batch API:** os roteiros do lote semanal custam cerca de metade.
 - **Shorts derivados:** cerca de US$ 0,005 cada.
 - **Comparação:** rodar o mesmo trabalho como subagentes do Claude Code custaria ordens de grandeza a mais, porque cada subagente começa do zero e relê o contexto. Por isso a v2 separa a supervisão (Claude Code) da execução (pipeline).
+
+## Changelog v3 → v3.1
+
+- **Workflow:** máquina de estados com portões humanos, `events.jsonl` por vídeo e doc gerada que o CI valida.
+- **Publicação:** GitHub Actions com o ambiente protegido `youtube-production`. O vídeo sobe privado com `publishAt` e `containsSyntheticMedia`. O Drive é lido via OIDC/WIF, sem chave.
+- **Segurança:**
+  - `.gitignore` ampliado;
+  - `scripts/check_secrets.py` no CI e no pre-commit;
+  - logs mascarados;
+  - `.claude/settings.json` impede o agente de ler credenciais, publicar, fazer merge ou mexer em secrets;
+  - hook STOP testado.
 
 ## Changelog v2 → v3
 

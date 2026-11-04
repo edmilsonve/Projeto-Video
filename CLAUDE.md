@@ -21,8 +21,12 @@ R6 Provedores: só Claude (SDK anthropic) e Gemini (SDK google-genai). Nada de O
    Roteiro: Claude → Gemini. Transcrição: Gemini. Voz: Kokoro local → Gemini TTS.
 R7 Plataforma: IDE Antigravity; harness Claude Code, o único agente que escreve no repositório.
    O Gemini via `agy` entra só para leitura e revisão cruzada (anexo B13).
+R8 Segurança: o agente nunca lê credenciais, nunca publica, nunca faz merge nem mexe em secrets
+   (bloqueado em .claude/settings.json). A publicação passa pelo ambiente protegido youtube-production
+   ou por uma pessoa no terminal. Ver docs/SEGURANCA_CREDENCIAIS.md e docs/AUTOMACAO_PUBLICACAO.md.
 
-FLUXO (estados em runs/<id>/state.json; etapas idempotentes por hash da entrada)
+FLUXO (máquina de estados em core/workflow.py, documentada em docs/WORKFLOW.md (gerado);
+estado em runs/<id>/state.json + events.jsonl; etapas idempotentes por hash da entrada)
 grill → brief → [pesquisa ∥ outliers ∥ seo] → estratégia → roteiro → revisão → OK humano do roteiro
 → [voz ∥ visuais ∥ thumbs] → edição → legendas → QA → PR → merge → publicação → analytics → aprendizado
 
@@ -39,3 +43,6 @@ COMANDOS
 - Testes: `python -m pytest` (sem rede, com dublês)
 - App: `streamlit run streamlit_app.py`
 - Modelos disponíveis: `python list_models.py`
+- Mudou core/workflow.py? Rode `python scripts/gen_workflow_docs.py`
+- Antes de commitar: `python scripts/check_secrets.py`
+- Mover um run de estado: `core.workflow.Run("runs/<id>").transition(...)`. Portões humanos exigem `human:<nome>`

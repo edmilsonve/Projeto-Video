@@ -16,3 +16,21 @@ ffmpeg.zip
 state.json
 pipeline.log
 service_account.json
+
+# Credenciais: nunca versionar (o scripts/check_secrets.py também bloqueia)
+.env.*
+!.env.example
+client_secret*.json
+credentials*.json
+token*.json
+token*.pickle
+*.pem
+*.p12
+*.key
+gha-creds-*.json
+.claude/settings.local.json
+
+# Saídas locais
+logs/
+STOP
+.pytest_cache/

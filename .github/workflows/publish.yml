@@ -1,0 +1,85 @@
+name: publish
+
+# Dispara quando um PR com runs aprovados entra na main, ou manualmente para um run.
+on:
+  push:
+    branches: [main]
+    paths: ["runs/**/state.json"]
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "ID do run (pasta em runs/)"
+        required: true
+
+concurrency:
+  group: youtube-publish
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    # Desligado até você configurar tudo (Settings → Secrets and variables → Variables).
+    if: vars.YOUTUBE_PUBLISH_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    # Ambiente protegido: exige aprovação de um revisor e só aceita a branch main.
+    # Os secrets do YouTube existem SÓ neste ambiente e só depois da aprovação.
+    environment: youtube-production
+    permissions:
+      contents: write   # registrar state.json/events.jsonl/youtube.json do run publicado
+      id-token: write   # OIDC → Workload Identity Federation para ler o Drive, sem chave guardada
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+
+      - name: Autenticar no Google Cloud (Drive somente leitura) via OIDC
+        if: vars.GCP_WIF_PROVIDER != ''
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DRIVE_SA }}
+
+      - name: Publicar (privado + publishAt)
+        env:
+          YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
+          YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
+          YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
+          GOOGLE_DRIVE_FOLDER_ID: ${{ vars.GOOGLE_DRIVE_FOLDER_ID }}
+          APPROVER: ${{ github.actor }}
+          RUN_ID: ${{ inputs.run_id }}
+        # O input chega por variável de ambiente (nunca interpolado no script) e é validado pelo código.
+        run: |
+          if [ -n "$RUN_ID" ]; then
+            python -m scripts.publish --ci --run "runs/$RUN_ID"
+          else
+            python -m scripts.publish --ci --pending
+          fi
+
+      - name: Guardar registro como artefato (vale mesmo se o push abaixo for bloqueado)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: publish-record-${{ github.run_id }}
+          path: |
+            runs/**/state.json
+            runs/**/events.jsonl
+            runs/**/youtube.json
+          if-no-files-found: ignore
+          retention-days: 90
+
+      - name: Registrar estado dos runs na main
+        if: always()
+        continue-on-error: true   # se a proteção da main bloquear o bot, o artefato acima guarda o registro
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add runs/
+          if ! git diff --cached --quiet; then
+            git commit -m "publish: registra estado dos runs [skip ci]"
+            git push
+          fi
